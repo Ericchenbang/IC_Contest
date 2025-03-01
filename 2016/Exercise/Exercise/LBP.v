@@ -15,154 +15,162 @@ output  reg	        finish;
 
 //====================================================================
 
-reg [7:0] data [0:16383];
+// 129~16254
+reg [13:0] lbpIndex;
+// 0~8
+reg [3:0] lbpCounter;
+reg [3:0] localCounter;
+// record the nine data
+reg [7:0] data [0:8];
 
-reg [14:0] lbpIndex;
-initial lbpIndex <= 15'd129;
-reg [7:0] lbpData [0:16383];
-reg [7:0] localLbpData;
-initial localLbpData = 0;
-initial gray_addr = 0;
+reg [7:0] lbpData;
+reg [7:0] tempLbpData;
 
-reg addToLbpData;
+reg [1:0] state;
+parameter   LoadData = 2'd0,
+            CountLbp = 2'd1,
+            OutputLbp = 2'd2,
+            Restore = 2'd3;
+reg startCount;
 
 always@(posedge clk, posedge reset) begin
     if (reset) begin
         gray_req <= 0;
-        gray_addr <= 0;
-        lbpIndex <= 15'd129;
-        lbp_addr <= lbpIndex;
         lbp_valid <= 0;
         finish <= 0;
-        addToLbpData <= 0;
-        localLbpData <= 0;
+
+        lbpCounter <= 0;
+        lbpData <= 0;
+        state <= LoadData;
+        startCount <= 0;
     end
-    else if (gray_ready && gray_req == 0) begin
+    else if ((gray_ready && gray_req == 0) && state == 0) begin
         gray_req <= 1;
+        state <= LoadData;
+
+        lbpIndex <= 14'd129;
+        lbpCounter <= 0;
+        lbpData <= 0;
+        startCount <= 0;
     end
-    else begin
-        if (gray_addr <= 15'd16383) begin
-            data[gray_addr] <= gray_data;
-            gray_addr <= gray_addr + 1;
-        end
-        else begin
-            gray_addr <= gray_addr;
-        end
-    end
-end
-
-
-
-// input data transform to LBP
-always@(posedge clk) begin
-    if (lbp_valid) begin
-        lbp_addr <= lbpIndex;
-        lbp_data <= lbpData[lbpIndex];
-
-        if (lbpIndex < 15'd16254) begin
-            if ((lbpIndex + 15'd2) % 15'd128 == 0)
-                lbpIndex <= lbpIndex + 15'd3;
-            else
-                lbpIndex <= lbpIndex + 1;
-        end
-        else begin
+    else if (lbpIndex < 14'd16255) begin
+        if (state == LoadData) begin
+            gray_req <= 1;
             lbp_valid <= 0;
-            finish <= 1; 
+
+            if (lbpCounter < 4'd9) begin
+                if ((lbpIndex - 1) % 128 == 0) begin
+                    case (lbpCounter)
+                        4'd0: gray_addr <= lbpIndex - 14'd129;
+                        4'd1: gray_addr <= lbpIndex - 14'd128;
+                        4'd2: gray_addr <= lbpIndex - 14'd127;
+                        4'd3: gray_addr <= lbpIndex - 14'd1;
+                        4'd4: gray_addr <= lbpIndex;
+                        4'd5: gray_addr <= lbpIndex + 14'd1;
+                        4'd6: gray_addr <= lbpIndex + 14'd127;
+                        4'd7: gray_addr <= lbpIndex + 14'd128;
+                        4'd8: gray_addr <= lbpIndex + 14'd129;
+                        default: gray_addr <= 0;
+                    endcase
+                    localCounter <= lbpCounter;
+                    data[localCounter] <= gray_data;
+                    lbpCounter <= lbpCounter + 1;
+                end
+                else begin
+                    case (lbpCounter)
+                        4'd2: begin
+                            gray_addr <= lbpIndex - 14'd127;
+                            data[0] <= data[1];
+                            data[1] <= data[2];
+                            data[3] <= data[4];
+                            data[4] <= data[5];
+                            data[6] <= data[7];
+                            data[7] <= data[8];
+                        end
+                        4'd5: gray_addr <= lbpIndex + 14'd1;
+                        4'd8: gray_addr <= lbpIndex + 14'd129;
+                        default: gray_addr <= 0;
+                    endcase
+                    localCounter <= lbpCounter;
+                    data[localCounter] <= gray_data;
+                    lbpCounter <= lbpCounter + 3;
+                end
+                
+            end
+            else begin
+                localCounter <= lbpCounter;
+                data[localCounter] <= gray_data;
+                gray_req <= 0;
+                lbpCounter <= 0;
+                state <= CountLbp;
+            end
+                    
         end
-    end
-    else if (gray_addr > 15'd258) begin
-        if ((lbpIndex + 15'd1) % 15'd128 == 0 || (lbpIndex % 15'd128 == 0))
-            localLbpData = 0;
-        else begin    
-            localLbpData = 0;
-            if (data[lbpIndex - 15'd129] >= data[lbpIndex])
-                localLbpData = localLbpData + 1;
-            else 
-                localLbpData = localLbpData + 0;
-                
-            if (data[lbpIndex - 15'd128] >= data[lbpIndex])
-                localLbpData = localLbpData + 8'd2;
-            else 
-                localLbpData = localLbpData + 0;
-                
-            if (data[lbpIndex - 15'd127] >= data[lbpIndex])
-                localLbpData = localLbpData + 8'd4;
-            else 
-                localLbpData = localLbpData + 0;
-            
-            if (data[lbpIndex - 15'd1] >= data[lbpIndex])
-                localLbpData = localLbpData + 8'd8;
-            else 
-                localLbpData = localLbpData + 0;
-            
-            if (data[lbpIndex + 15'd1] >= data[lbpIndex])
-                localLbpData = localLbpData + 8'd16;
-            else 
-                localLbpData = localLbpData + 0;
-                
-            if (data[lbpIndex + 15'd127] >= data[lbpIndex])
-                localLbpData = localLbpData + 8'd32;
-            else 
-                localLbpData = localLbpData + 0;
-                
-            if (data[lbpIndex + 15'd128] >= data[lbpIndex])
-                localLbpData = localLbpData + 8'd64;
-            else 
-                localLbpData = localLbpData + 0;
-                
-            if (data[lbpIndex + 15'd129] >= data[lbpIndex])
-                localLbpData = localLbpData + 8'd128;
-            else 
-                localLbpData = localLbpData + 0;
+        else if (state == CountLbp) begin
+            gray_req <= 0;
+            startCount <= 1;
+            state <= OutputLbp;
         end
-        lbpData[lbpIndex] <= localLbpData;
-        
-        if (lbpIndex <= 15'd16253) begin
-            lbpIndex <= lbpIndex + 1;
+        else if (state == OutputLbp) begin
+            if (startCount) begin
+                lbpData <= tempLbpData;
+                startCount <= 0;
+            end
+            else begin
+                lbp_valid <= 1;
+                lbp_addr <= lbpIndex;
+                lbp_data <= lbpData;
+
+                lbpCounter <= 0;
+                        
+                if ((lbpIndex + 14'd2) % 14'd128 == 0)
+                    lbpIndex <= lbpIndex + 14'd3;
+                else 
+                    lbpIndex <= lbpIndex + 14'd1;
+                state <= Restore;
+            end
         end
         else begin
-            lbpIndex <= 15'd129;
-            lbp_valid <= 1;
+            state <= LoadData;
+            
+            lbpData <= 0;
+            if ((lbpIndex - 1) % 128 == 0)
+                lbpCounter <= 0;
+            else
+                lbpCounter <= 2;
+                
+            gray_req <= 1;
+            lbp_valid <= 0;
+            finish <= 0;
         end
     end
-    else begin
-        lbpData[gray_addr] <= 0;
-    end
+    else
+        finish <= 1;
 end
 
-/*always@(*) begin
-    if (addToLbpData) begin
-        localLbpData = 0;
 
-        if (data[lbpIndex - 15'd129] >= data[lbpIndex])
-            localLbpData = localLbpData + 1;
-            
-        if (data[lbpIndex - 15'd128] >= data[lbpIndex])
-            localLbpData = localLbpData + 8'd2;
-            
-        if (data[lbpIndex - 15'd127] >= data[lbpIndex])
-            localLbpData = localLbpData + 8'd4;
-        
-        if (data[lbpIndex - 15'd1] >= data[lbpIndex])
-            localLbpData = localLbpData + 8'd8;
-        
-        if (data[lbpIndex + 15'd1] >= data[lbpIndex])
-            localLbpData = localLbpData + 8'd16;
-            
-        if (data[lbpIndex + 15'd127] >= data[lbpIndex])
-            localLbpData = localLbpData + 8'd32;
-            
-        if (data[lbpIndex + 15'd128] >= data[lbpIndex])
-            localLbpData = localLbpData + 8'd64;
-            
-        if (data[lbpIndex + 15'd129] >= data[lbpIndex])
-            localLbpData = localLbpData + 8'd128;
-        
-        addToLbpData = 0;
+always@(*) begin
+    if (startCount) begin
+        tempLbpData = 0;
+        if (data[4] <= data[0]) 
+            tempLbpData = tempLbpData | 8'd1;
+        if (data[4] <= data[1]) 
+            tempLbpData = tempLbpData | 8'd2;
+        if (data[4] <= data[2]) 
+            tempLbpData = tempLbpData | 8'd4;
+        if (data[4] <= data[3]) 
+            tempLbpData = tempLbpData | 8'd8;
+        if (data[4] <= data[5]) 
+            tempLbpData = tempLbpData | 8'd16;
+        if (data[4] <= data[6]) 
+            tempLbpData = tempLbpData | 8'd32;
+        if (data[4] <= data[7]) 
+            tempLbpData = tempLbpData | 8'd64;
+        if (data[4] <= data[8]) 
+            tempLbpData = tempLbpData | 8'd128;
     end
-    else begin
-        localLbpData = 0;
-    end
-end*/
+    else
+        tempLbpData = 0;
+end
 //====================================================================
 endmodule
