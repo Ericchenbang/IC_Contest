@@ -31,7 +31,7 @@ parameter   LoadData = 2'd0,
             CountLbp = 2'd1,
             OutputLbp = 2'd2,
             Restore = 2'd3;
-reg startCount;
+reg passIndex;
 
 always@(posedge clk, posedge reset) begin
     if (reset) begin
@@ -40,18 +40,18 @@ always@(posedge clk, posedge reset) begin
         finish <= 0;
 
         lbpCounter <= 0;
-        lbpData <= 0;
         state <= LoadData;
-        startCount <= 0;
+
+        passIndex <= 1;
     end
-    else if ((gray_ready && gray_req == 0) && state == 0) begin
+    else if ((gray_ready && gray_req == 0) && state == LoadData) begin
         gray_req <= 1;
         state <= LoadData;
 
         lbpIndex <= 14'd129;
         lbpCounter <= 0;
-        lbpData <= 0;
-        startCount <= 0;
+
+        passIndex <= 1;
     end
     else if (lbpIndex < 14'd16255) begin
         if (state == LoadData) begin
@@ -59,7 +59,7 @@ always@(posedge clk, posedge reset) begin
             lbp_valid <= 0;
 
             if (lbpCounter < 4'd9) begin
-                if ((lbpIndex - 1) % 128 == 0) begin
+                if (passIndex) begin
                     case (lbpCounter)
                         4'd0: gray_addr <= lbpIndex - 14'd129;
                         4'd1: gray_addr <= lbpIndex - 14'd128;
@@ -95,29 +95,20 @@ always@(posedge clk, posedge reset) begin
                     data[localCounter] <= gray_data;
                     lbpCounter <= lbpCounter + 3;
                 end
-                
             end
             else begin
                 localCounter <= lbpCounter;
                 data[localCounter] <= gray_data;
                 gray_req <= 0;
-                lbpCounter <= 0;
-                state <= CountLbp;
-            end
-                    
-        end
-        else if (state == CountLbp) begin
-            gray_req <= 0;
-            startCount <= 1;
-            state <= OutputLbp;
+                state <= OutputLbp;
+            end         
         end
         else if (state == OutputLbp) begin
-            if (startCount) begin
+            if (lbp_valid == 0) begin
                 lbpData <= tempLbpData;
-                startCount <= 0;
+                lbp_valid <= 1;
             end
             else begin
-                lbp_valid <= 1;
                 lbp_addr <= lbpIndex;
                 lbp_data <= lbpData;
 
@@ -133,15 +124,17 @@ always@(posedge clk, posedge reset) begin
         else begin
             state <= LoadData;
             
-            lbpData <= 0;
-            if ((lbpIndex - 1) % 128 == 0)
+            if ((lbpIndex - 1) % 128 == 0) begin
+                passIndex <= 1;
                 lbpCounter <= 0;
-            else
+            end
+            else begin
+                passIndex <= 0;
                 lbpCounter <= 2;
+            end
                 
             gray_req <= 1;
             lbp_valid <= 0;
-            finish <= 0;
         end
     end
     else
@@ -150,27 +143,14 @@ end
 
 
 always@(*) begin
-    if (startCount) begin
-        tempLbpData = 0;
-        if (data[4] <= data[0]) 
-            tempLbpData = tempLbpData | 8'd1;
-        if (data[4] <= data[1]) 
-            tempLbpData = tempLbpData | 8'd2;
-        if (data[4] <= data[2]) 
-            tempLbpData = tempLbpData | 8'd4;
-        if (data[4] <= data[3]) 
-            tempLbpData = tempLbpData | 8'd8;
-        if (data[4] <= data[5]) 
-            tempLbpData = tempLbpData | 8'd16;
-        if (data[4] <= data[6]) 
-            tempLbpData = tempLbpData | 8'd32;
-        if (data[4] <= data[7]) 
-            tempLbpData = tempLbpData | 8'd64;
-        if (data[4] <= data[8]) 
-            tempLbpData = tempLbpData | 8'd128;
-    end
-    else
-        tempLbpData = 0;
+    tempLbpData[0] = (data[4] <= data[0]);
+    tempLbpData[1] = (data[4] <= data[1]);
+    tempLbpData[2] = (data[4] <= data[2]);
+    tempLbpData[3] = (data[4] <= data[3]);
+    tempLbpData[4] = (data[4] <= data[5]);
+    tempLbpData[5] = (data[4] <= data[6]);
+    tempLbpData[6] = (data[4] <= data[7]);
+    tempLbpData[7] = (data[4] <= data[8]);
 end
 //====================================================================
 endmodule
