@@ -11,8 +11,6 @@ module JAM (
 reg [2:0] state;
 parameter FindPivot = 3'd0, ChangeNumber = 3'd1, Flip = 3'd2, Count = 3'd3,  Output = 3'd5;
 
-// LoadCost
-//reg [6:0] workerJob [7:0] [7:0];
 
 // StartJAM
 // FindPivot
@@ -27,9 +25,9 @@ reg [2:0] cMinIndex;
 reg [1:0] flipUpperBound;   //cmb
 
 // Count
-reg firstCount;
+//reg firstCount;
 //reg [9:0] totalCost;        //cmb
-reg [9:0] eachTotalCost [0:2];
+//reg [9:0] eachTotalCost [0:2];
 reg [9:0] totalCost;
 
 always@(posedge CLK, posedge RST) begin
@@ -44,66 +42,76 @@ always@(posedge CLK, posedge RST) begin
         seq[5] <= 3'd5;
         seq[6] <= 3'd6;
         seq[7] <= 3'd7;
+
         //FindPivot
         index <= 0;
         pivotIndex <= 0;
 
         // ChangeNumber
-        //cIndex <= 0;
         cMinIndex <= 0;
 
-        // Flip
-        //fIndex <= 0;
-
         // Count
-        firstCount <= 1;
+        //firstCount <= 1;
         totalCost <= 0;
-        eachTotalCost[0] <= 0;
-        eachTotalCost[1] <= 0;
-        eachTotalCost[2] <= 0;
-        //eachTotalCost[3] <= 0;
-        //eachTotalCost[4] <= 0;
+        //eachTotalCost[0] <= 0;
+        //eachTotalCost[1] <= 0;
+        //eachTotalCost[2] <= 0;
 
         MinCost <= 10'd1023;
         MatchCount <= 0;
-
     end
     else if (state == FindPivot) begin
-        if (seq[index] > seq[index - 1]) begin
+        if (seq[7] > seq[6]) begin
             state <= ChangeNumber;
-            pivotIndex <= index - 1;
-            cMinIndex <= index - 1;
+            pivotIndex <= 3'd6;
+            cMinIndex <= 3'd6;
+            index <= 4'd7;
         end
-        else if (index >= 2 && (seq[index - 1] > seq[index - 2])) begin
+        else if (seq[6] > seq[5]) begin
             state <= ChangeNumber;
-            pivotIndex <= index - 2;
-            cMinIndex <= index - 1;
+            pivotIndex <= 3'd5;
+            cMinIndex <= 3'd5;
+            index <= 4'd6;
+        end
+        else if (seq[5] > seq[4]) begin
+            state <= ChangeNumber;
+            pivotIndex <= 3'd4;
+            cMinIndex <= 3'd4;
+            index <= 4'd5;
+        end
+        else if (seq[4] > seq[3]) begin
+            state <= ChangeNumber;
+            pivotIndex <= 3'd3;
+            cMinIndex <= 3'd3;
+            index <= 4'd4;
+        end
+        else if (seq[3] > seq[2]) begin
+            state <= ChangeNumber;
+            pivotIndex <= 3'd2;
+            cMinIndex <= 3'd2;
+            index <= 4'd3;
+        end
+        else if (seq[2] > seq[1]) begin
+            state <= ChangeNumber;
+            pivotIndex <= 3'd1;
+            cMinIndex <= 3'd1;
+            index <= 4'd2;
+        end
+        else if (seq[1] > seq[0]) begin
+            state <= ChangeNumber;
+            pivotIndex <= 3'd0;
+            cMinIndex <= 3'd0;
+            index <= 4'd1;
         end
         else begin
-            // Go through the whole permutation
-            if (index == 1) begin
-                state <= Output;
-                Valid <= 1;
-            end
-            else 
-                index <= index - 1;
+            state <= Output;
+            Valid <= 1;
         end
     end
     else if (state == ChangeNumber) begin
         if (index <= 4'd7) begin
-            if (seq[pivotIndex] < seq[index]) begin
-                if (cMinIndex == pivotIndex) begin
-                    cMinIndex <= index;
-                end
-                else if (seq[index] < seq[cMinIndex]) begin
-                    cMinIndex <= index;
-                end
-                /*else begin
-                    cMinIndex <= cMinIndex + 0;
-                end*/
-            end
-            /*else 
-                cMinIndex <= cMinIndex + 0;*/
+            if (seq[pivotIndex] < seq[index] && (cMinIndex == pivotIndex || seq[index] < seq[cMinIndex]))     
+                cMinIndex <= index;
             index <= index + 1;
         end
         else begin
@@ -120,26 +128,14 @@ always@(posedge CLK, posedge RST) begin
             index <= index + 1;
         end
         else begin
-            if (firstCount)
-                index <= 0;
-            else 
-                index <= (pivotIndex < 4'd2) ? pivotIndex : 4'd3;
-            
+            index <= 0;
             totalCost <= 0;
             state <= Count;
         end
     end
     else if (state == Count) begin
         if (index <= 4'd7) begin
-            if (index == 0)
-                eachTotalCost[index] <= Cost;
-            else if (index <= 4'd2)
-                eachTotalCost[index] <= eachTotalCost[index - 1] + Cost;
-            else if (index == 4'd3) 
-                totalCost <= eachTotalCost[index - 1] + Cost;
-            else 
-                totalCost <= totalCost + Cost;
-            
+            totalCost <= totalCost + Cost;
             index <= index + 1;
         end
         else begin
@@ -150,12 +146,7 @@ always@(posedge CLK, posedge RST) begin
             else if (totalCost == MinCost) begin
                 MatchCount <= MatchCount + 1;
             end
-            /*else begin
-                MatchCount <= MatchCount + 0;
-            end*/
-
             state <= FindPivot;
-            index <= 4'd7;
         end
     end
     else begin
