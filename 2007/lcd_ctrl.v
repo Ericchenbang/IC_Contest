@@ -8,114 +8,144 @@ output  reg [7:0]   dataout;
 output  reg       output_valid;
 output  reg        busy;
 
+parameter Reflash = 0, LoadData = 1, Right = 2, Left = 3, Up = 4, Down = 5;
+reg [2:0] state;
 
-reg [7:0] data [35:0];
-reg [5:0] inputCount;
-reg [3:0] outputCount;
-reg [2:0] doCmd;
-reg [1:0] origin [1:0];
-
-parameter   Output = 3'd0,
-            LoadData = 3'd1,
-            ShiftRight = 3'd2,
-            ShiftLeft = 3'd3,
-            ShiftUp = 3'd4,
-            ShiftDown = 3'd5;
-
-wire [1:0] ocDivideThree, ocModThree;
-assign ocDivideThree = outputCount/3;
-assign ocModThree = outputCount%3;
-
-wire [3:0] oIplusY;
-assign oIplusY = (origin[1] + ocDivideThree) << 1;
-
-wire [5:0] outputIndexOne, outputIndexTwo;
-wire [5:0] outputIndex; 
-assign outputIndexOne = oIplusY * 3;
-assign outputIndexTwo = (origin[0] + ocModThree);
-assign outputIndex = outputIndexOne + outputIndexTwo;
+reg [7:0] data [0:5][0:5];
+reg [3:0] count;
+reg [2:0] row;
+reg [2:0] col;
 
 
 always@(posedge clk, posedge reset) begin
     if (reset) begin
-        inputCount <= 0;
-        outputCount <= 0;
-        origin[0] <= 0;
-        origin[1] <= 0;
+        row <= 3'd0;
+        col <= 3'd0;
+        count <= 0;
 
-        busy <= 0;
         output_valid <= 0;
-
+        busy <= 0;
     end
-    else if (cmd_valid && busy == 0) begin
-        doCmd <= cmd;
-
+    else if (cmd_valid && !busy)begin
         busy <= 1;
+        state <= cmd;
+        
+        if (cmd == Reflash) begin
+            output_valid <= 1;
+        end
+        else if (cmd == LoadData) begin
+            output_valid <= 0;
+            row <= 0;
+            col <= 0;
+        end
+        else begin
+            output_valid <= 0;
+        end
     end
-    else begin
-            case(doCmd)
-                Output: begin
-                    output_valid <= 1;
-                    dataout <= data[outputIndex];
-
-                    if (outputCount == 4'd9) begin
-                        outputCount <= 0;
-                        
+    else if (busy) begin
+        case (state)
+            Reflash: begin
+                if (count <= 4'd8) begin
+                    if (count == 4'd2 || count == 4'd5) begin
+                        row <= row + 1;
+                        col <= col - 2;
+                        count <= count + 1;
+                    end
+                    else if (count == 4'd8) begin
+                        row <= row - 2;
+                        col <= col - 2;
+                        count <= 0;
                         output_valid <= 0;
                         busy <= 0;
                     end
-                    else
-                        outputCount <= outputCount + 4'd1;
+                    else begin
+                        col <= col + 1;
+                        count <= count + 1;
+                    end
                 end
-                LoadData: begin
-                    data[inputCount] <= datain;
+                else begin
+                    count <= 0;
+                end
+            end
+            LoadData: begin
+                if (row < 3'd6) begin
+                    data[row][col] <= datain;
 
-                    if (inputCount == 6'd35) begin
-                        doCmd <= Output;
-                        inputCount <= 6'd0;
-                        origin[0] <= 2'd2;
-                        origin[1] <= 2'd2;
+                    if (col == 3'd5) begin
+                        row <= row + 1;
+                        col <= 0;
                     end
-                    else 
-                        inputCount <= inputCount + 6'd1;
-                end
-                ShiftRight: begin
-                    if (origin[0] == 2'd3)
-                        doCmd <= Output;
                     else begin
-                        origin[0] <= origin[0] + 2'd1;
-                        doCmd <= Output;
+                        col <= col + 1;
                     end
                 end
-                ShiftLeft: begin
-                    if (origin[0] == 2'd0)
-                        doCmd <= Output;
-                    else begin
-                        origin[0] <= origin[0] - 2'd1;
-                        doCmd <= Output;
-                    end
+                else begin
+                    state <= Reflash;
+                    output_valid <= 1;
+                    row <= 2;
+                    col <= 2;
                 end
-                ShiftUp: begin
-                    if (origin[1] == 2'd0)
-                        doCmd <= Output;
-                    else begin
-                        origin[1] <= origin[1] - 2'd1;
-                        doCmd <= Output;
-                    end
+            end
+            Right: begin
+                if (col < 3) begin
+                    col <= col + 1;
                 end
-                ShiftDown: begin
-                    if (origin[1] == 2'd3)
-                        doCmd <= Output;
-                    else begin
-                        origin[1] <= origin[1] + 2'd1;
-                        doCmd <= Output;
-                    end
+                else begin
+                    col <= col + 0;
                 end
-                default: begin
-                    output_valid <= 0;
+                state <= Reflash;
+                output_valid <= 1;
+            end
+            Left: begin
+                if (col > 0) begin
+                    col <= col - 1;
                 end
-            endcase
+                else begin
+                    col <= col - 0;
+                end
+                state <= Reflash;
+                output_valid <= 1;
+            end
+            Up: begin
+                if (row > 0) begin
+                    row <= row - 1;
+                end
+                else begin
+                    row <= row - 0;
+                end
+                state <= Reflash;
+                output_valid <= 1;
+            end
+            Down: begin
+                if (row < 3) begin
+                    row <= row + 1;
+                end
+                else begin
+                    row <= row + 0;
+                end
+                state <= Reflash;
+                output_valid <= 1;
+            end
+            default: begin
+                busy <= 0;
+            end
+        endcase
+    end
+    else begin
+        busy <= 0;
+        //output_valid <= 0;
     end
 end
+
+
+always@(*) begin
+    if (state == Reflash && output_valid)begin
+        dataout = data[row][col];
+    end
+    else begin
+
+    end
+end
+
 
 endmodule

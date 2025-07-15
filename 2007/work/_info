@@ -1,0 +1,52 @@
+m255
+K4
+z2
+13
+!s112 1.1
+!i10d 8192
+!i10e 25
+!i10f 100
+cModel Technology
+dD:/IC Contest/past test/2005
+vlcd_ctrl
+Z0 !s110 1751945634
+!i10b 1
+!s100 OaCIon656HY7k[o8VAo7g0
+IdAhmmR:9b0X9:c_hfTB;>3
+Z1 VDg1SIo80bB@j0V0VzS_@n1
+Z2 dD:/IC Contest/past test/2007
+w1751945595
+8D:/IC Contest/past test/2007/lcd_ctrl.v
+FD:/IC Contest/past test/2007/lcd_ctrl.v
+L0 1
+Z3 OV;L;10.5b;63
+r1
+!s85 0
+31
+Z4 !s108 1751945634.000000
+!s107 D:/IC Contest/past test/2007/lcd_ctrl.v|
+!s90 -reportprogress|300|-work|work|-stats=none|D:/IC Contest/past test/2007/lcd_ctrl.v|
+!i113 1
+Z5 o-work work
+Z6 tCvgOpt 0
+vtest
+R0
+!i10b 1
+!s100 >3iWR9gX828=`g57Z4WSi0
+I[O]SfXm8>0f1Y[UTT4:?Q1
+R1
+R2
+w1751945617
+8D:/IC Contest/past test/2007/testfixture.v
+FD:/IC Contest/past test/2007/testfixture.v
+L0 8
+R3
+r1
+!s85 0
+31
+R4
+!s107 D:/IC Contest/past test/2007/testfixture.v|
+!s90 -reportprogress|300|-work|work|-stats=none|D:/IC Contest/past test/2007/testfixture.v|
+!i113 1
+R5
+R6
