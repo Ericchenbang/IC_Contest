@@ -11,6 +11,9 @@
   ![](https://img.shields.io/badge/area-6482-pink) ![](https://img.shields.io/badge/timing-1397128-lightblue)
 
 
+- 2018 Image Display Control  
+  ![](https://img.shields.io/badge/area-127784-pink) ![](https://img.shields.io/badge/timing-6686-lightblue)
+
 - 
 
 # gradulate level
