@@ -14,6 +14,7 @@
 - 2018 Image Display Control  
   ![](https://img.shields.io/badge/area-127784-pink) ![](https://img.shields.io/badge/timing-6686-lightblue)
 
-- 
+- 2022 Job Assignment Machine  
+  ![](https://img.shields.io/badge/area-7504-pink) ![](https://img.shields.io/badge/Get_valid_at_cycle-500602-lightblue)
 
 # gradulate level
