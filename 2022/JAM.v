@@ -9,174 +9,139 @@ module JAM (
     output reg Valid );
 
 reg [2:0] state;
-parameter FindPivot = 3'd0, ChangeNumber = 3'd1, Flip = 3'd2, Count = 3'd3,  Output = 3'd5;
+parameter FindPivot = 0, MinusCost = 1, Change = 2, Flip = 3, CountCost = 4;
 
-
-// StartJAM
 // FindPivot
-reg [2:0] seq [0:7];
-reg [3:0] index;
-reg [2:0] pivotIndex;
+reg [2:0] arrange [0:7];
+reg [2:0] findCount;
+reg [2:0] pivot;
+reg findPivot;
 
-// ChangeNumber
-reg [2:0] cMinIndex;
+// MinusCost
+reg [2:0] minusCount;
+
+// Change
+reg [2:0] changeIndex;
 
 // Flip
-reg [1:0] flipUpperBound;   //cmb
+reg [3:0] flipCount;
+wire [2:0] flipBound;
+assign flipBound = ((7 - pivot) >> 1) + 1;
 
-// Count
-//reg firstCount;
-//reg [9:0] totalCost;        //cmb
-//reg [9:0] eachTotalCost [0:2];
-reg [9:0] totalCost;
+// CountCost
+reg [9:0] currCost;
+reg [3:0] costCount;
 
-always@(posedge CLK, posedge RST) begin
-    if (RST) begin 
-        state <= Count;
-
-        seq[0] <= 3'd0;
-        seq[1] <= 3'd1;
-        seq[2] <= 3'd2;
-        seq[3] <= 3'd3;
-        seq[4] <= 3'd4;
-        seq[5] <= 3'd5;
-        seq[6] <= 3'd6;
-        seq[7] <= 3'd7;
-
-        //FindPivot
-        index <= 0;
-        pivotIndex <= 0;
-
-        // ChangeNumber
-        cMinIndex <= 0;
-
-        // Count
-        //firstCount <= 1;
-        totalCost <= 0;
-        //eachTotalCost[0] <= 0;
-        //eachTotalCost[1] <= 0;
-        //eachTotalCost[2] <= 0;
-
-        MinCost <= 10'd1023;
-        MatchCount <= 0;
+always@(*) begin
+    if (state == CountCost) begin
+        W = costCount;
+        J = arrange[costCount];  
     end
-    else if (state == FindPivot) begin
-        if (seq[7] > seq[6]) begin
-            state <= ChangeNumber;
-            pivotIndex <= 3'd6;
-            cMinIndex <= 3'd6;
-            index <= 4'd7;
-        end
-        else if (seq[6] > seq[5]) begin
-            state <= ChangeNumber;
-            pivotIndex <= 3'd5;
-            cMinIndex <= 3'd5;
-            index <= 4'd6;
-        end
-        else if (seq[5] > seq[4]) begin
-            state <= ChangeNumber;
-            pivotIndex <= 3'd4;
-            cMinIndex <= 3'd4;
-            index <= 4'd5;
-        end
-        else if (seq[4] > seq[3]) begin
-            state <= ChangeNumber;
-            pivotIndex <= 3'd3;
-            cMinIndex <= 3'd3;
-            index <= 4'd4;
-        end
-        else if (seq[3] > seq[2]) begin
-            state <= ChangeNumber;
-            pivotIndex <= 3'd2;
-            cMinIndex <= 3'd2;
-            index <= 4'd3;
-        end
-        else if (seq[2] > seq[1]) begin
-            state <= ChangeNumber;
-            pivotIndex <= 3'd1;
-            cMinIndex <= 3'd1;
-            index <= 4'd2;
-        end
-        else if (seq[1] > seq[0]) begin
-            state <= ChangeNumber;
-            pivotIndex <= 3'd0;
-            cMinIndex <= 3'd0;
-            index <= 4'd1;
+    else if (state == MinusCost) begin
+        W = minusCount;
+        J = arrange[minusCount];  
+    end
+    else begin
+        W = 0;
+        J = 0;
+    end
+end
+
+
+always@(posedge CLK, posedge RST)begin
+    if (RST) begin
+        state <= CountCost;
+        arrange[0] <= 0;
+        arrange[1] <= 1;
+        arrange[2] <= 2;
+        arrange[3] <= 3;
+        arrange[4] <= 4;
+        arrange[5] <= 5;
+        arrange[6] <= 6;
+        arrange[7] <= 7;
+
+        currCost <= 0;
+        costCount <= 0;
+        pivot <= 0;
+
+        MatchCount <= 0;
+        MinCost <= 10'd1023;
+        Valid <= 0;
+    end
+    else if (state == CountCost) begin
+        if (costCount <= 7) begin
+            currCost <= currCost + Cost;
+            costCount <= costCount + 1;
         end
         else begin
-            state <= Output;
-            Valid <= 1;
+            state <= FindPivot;
+            findCount <= 7;
+            findPivot <= 0;
+            
+            if (currCost < MinCost) begin
+                MinCost <= currCost;
+                MatchCount <= 1;
+            end
+            else if (currCost == MinCost) begin
+                MatchCount <= MatchCount + 1;
+            end
         end
     end
-    else if (state == ChangeNumber) begin
-        if (index <= 4'd7) begin
-            if (seq[pivotIndex] < seq[index] && (cMinIndex == pivotIndex || seq[index] < seq[cMinIndex]))     
-                cMinIndex <= index;
-            index <= index + 1;
+    else if (state == FindPivot) begin
+        if (findCount > 0) begin
+            if (arrange[findCount] > arrange[findCount - 1]) begin
+                state <= MinusCost;
+                minusCount <= findCount - 1;
+                pivot <= findCount - 1;
+                changeIndex <= findCount;
+
+                findCount <= 7;
+            end
+            else begin
+                findCount <= findCount - 1;
+            end
+        end
+        else begin
+            Valid <= 1;
+        end
+    end 
+    else if (state == MinusCost) begin
+        if (minusCount < 7) begin
+            currCost <= currCost - Cost;
+            minusCount <= minusCount + 1;
+        end
+        else begin
+            currCost <= currCost - Cost;
+            state <= Change;
+
+        end
+    end  
+    else if (state == Change) begin
+        if (findCount > pivot) begin
+            findCount <= findCount - 1;
+            if (arrange[findCount] > arrange[pivot] && arrange[findCount] < arrange[changeIndex]) begin
+                changeIndex <= findCount;
+            end
         end
         else begin
             state <= Flip;
-            index <= pivotIndex + 1;
-            seq[cMinIndex] <= seq[pivotIndex];
-            seq[pivotIndex] <= seq[cMinIndex];
+            flipCount <= 1;
+            arrange[pivot] <= arrange[changeIndex];
+            arrange[changeIndex] <= arrange[pivot];
         end
     end
     else if (state == Flip) begin
-        if (index < pivotIndex + 1 + flipUpperBound) begin
-            seq[index] <= seq[3'd7 - (index - (pivotIndex + 1))];
-            seq[3'd7 - (index - (pivotIndex + 1))] <= seq[index];
-            index <= index + 1;
+        if (flipCount < flipBound) begin
+            arrange[pivot + flipCount] <= arrange[7 - flipCount + 1];
+            arrange[7 - flipCount + 1] <= arrange[pivot + flipCount];
+            flipCount <= flipCount + 1;
         end
         else begin
-            index <= 0;
-            totalCost <= 0;
-            state <= Count;
+            state <= CountCost;
+            costCount <= pivot;
         end
-    end
-    else if (state == Count) begin
-        if (index <= 4'd7) begin
-            totalCost <= totalCost + Cost;
-            index <= index + 1;
-        end
-        else begin
-            if (totalCost < MinCost) begin
-                MinCost <= totalCost;
-                MatchCount <= 1;
-            end
-            else if (totalCost == MinCost) begin
-                MatchCount <= MatchCount + 1;
-            end
-            state <= FindPivot;
-        end
-    end
-    else begin
-        Valid <= 0;
     end
 end
 
-
-
-
-always@(*) begin
-    if (state == Flip) begin
-        W = 0;
-        J = 0;
-        flipUpperBound = (3'd7 - pivotIndex) >> 1;
-        //flipIndex = ;
-    end
-    else if (state == Count) begin
-        W = index;
-        J = seq[index];
-        flipUpperBound = 0;
-        //flipIndex = 0;
-    end
-    else begin
-        W = 0;
-        J = 0;
-        flipUpperBound = 0;
-        //flipIndex = 0;
-    end
-
-end
 
 endmodule
