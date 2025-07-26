@@ -16,55 +16,48 @@ module  CONV(
 	);
 
 reg [2:0] state;
-parameter 	StoreData = 3'd0,
-			// do convolution and ReLu 
-			Conv = 3'd1,
-			WriteLayerZero = 3'd2,
-			ReadData = 3'd3,
-			WriteLayerOne = 3'd4;
+parameter InputData = 0, Conv = 1, OutputLayer0 = 2, MaxPooling = 3, OutputLayer1 = 4;
 
-reg signed [19:0] kernel [8:0];
-reg signed [19:0] bias;
+// InputData
+reg signed[19:0] data [0:8];
+// 0~4095
+reg [11:0] inputCount;
+reg [3:0] dataCount;
 
-reg signed [19:0] data [8:0];
-reg signed [43:0] convProduct;
+// Conv
+reg [3:0] convCount;
+reg signed  [19:0] kernel [0:8];
+reg [19:0] bias;
+reg signed [39:0] convResult;
 
-// from 0 to 4096
-reg [11:0] inputIndex;
-// inputIndex had gone through 0 to 4096
-reg completeLayerZero;
+// MaxPooling
+reg [11:0] poolCount;
+reg [9:0] layer1Index;
 
-
-// read the data from layer 0 and store them
-reg signed [20:0] pool[3:0];
-// from 0 to 1031
-reg [11:0] outputIndex;
-// compare the four data and find the maxest in combination circuit
-reg signed [20:0] max;
 
 always@(posedge clk, posedge reset) begin
 	if (reset) begin
-		state <= 0;
+		state <= InputData;
 
-		kernel[0] <= 20'h0A89E;
-		kernel[1] <= 20'h092D5;
-		kernel[2] <= 20'h06D43;
-		kernel[3] <= 20'h01004;
-		kernel[4] <= 20'hF8F71;
-		kernel[5] <= 20'hF6E54;
-		kernel[6] <= 20'hFA6D7;
-		kernel[7] <= 20'hFC834;
-		kernel[8] <= 20'hFAC19;
-		bias <= 20'h01310;
+		data[0] <= 0;
+		data[1] <= 0;
+		data[2] <= 0;
+		data[3] <= 0;
+		data[6] <= 0;
+		inputCount <= 0;
+		dataCount <= 4;
 
+			
+		convCount <= 0;	
+		convResult <= 0;
 
-		inputIndex <= 0;
+		poolCount <= 0;
+		layer1Index <= 0;
 
-		iaddr <= 0;
-		busy <= 0;
 		cwr <= 0;
 		crd <= 0;
 		csel <= 0;
+		busy <= 0;
 	end
 	else if (ready) begin
 		kernel[0] <= 20'h0A89E;
@@ -77,149 +70,72 @@ always@(posedge clk, posedge reset) begin
 		kernel[7] <= 20'hFC834;
 		kernel[8] <= 20'hFAC19;
 		bias <= 20'h01310;
-
 		busy <= 1;
-
+		
 	end
-	else if (busy) begin
-		if (state == StoreData) begin
-			// first row
-			if (inputIndex >= 0 && inputIndex <= 12'd63) begin
-				if (inputIndex == 0) begin
-					if (iaddr == 0) begin
-						data[0] <= 0;
-						data[1] <= 0;
-						data[2] <= 0;
-						data[3] <= 0;
-						data[6] <= 0;
-						data[4] <= idata;
-						iaddr <= 12'd1;
-					end
-					else if (iaddr == 12'd1) begin
-						data[5] <= idata;
-						iaddr <= 12'd64;
-					end
-					else if (iaddr == 12'd64) begin
-						data[7] <= idata;
-						iaddr <= 12'd65;
-					end
-					else begin
-						state <= Conv;
-						data[8] <= idata;
-						iaddr <= 12'd2;
-					end
+	else if (state == InputData) begin
+		if (inputCount <= 63) begin
+			if (inputCount == 0) begin
+				data[dataCount] <= idata;
+
+				if (dataCount == 4 || dataCount == 7) begin
+					dataCount <= dataCount + 1;
 				end
-				else if (inputIndex == 12'd63) begin
+				else if (dataCount == 5) begin
+					dataCount <= 7;
+				end
+				else begin  // dataCount == 8
 					state <= Conv;
+					dataCount <= 5;
+				end
+			end
+			else if (inputCount == 63) begin
+				state <= Conv;
+				data[3] <= data[4];
+				data[4] <= data[5];
+				data[5] <= 0;
+				data[6] <= data[7];
+				data[7] <= data[8];
+				data[8] <= 0;
+				dataCount <= 1;
+			end
+			else begin
+				data[dataCount] <= idata;
+
+				if (dataCount == 5) begin
 					data[3] <= data[4];
 					data[4] <= data[5];
-					data[5] <= 0;
 					data[6] <= data[7];
 					data[7] <= data[8];
-					data[8] <= 0;
-					iaddr <= 12'd64;
+					dataCount <= 8;
 				end
 				else begin
-					if (iaddr == inputIndex + 1) begin
-						data[3] <= data[4];
-						data[4] <= data[5];
-						data[6] <= data[7];
-						data[7] <= data[8];
-						data[5] <= idata;
-						iaddr <= iaddr + 12'd64;
-					end
-					else begin
-						state <= Conv;
-						data[8] <= idata;
-						iaddr <= iaddr - 12'd64 + 1;
-					end
+					state <= Conv;	
+					dataCount <= 5;
 				end
 			end
-			// last row
-			else if (inputIndex >= 12'd4032 && inputIndex <= 12'd4095) begin
-				if (inputIndex == 12'd4032) begin
-					if (iaddr == inputIndex) begin
-						data[0] <= 0;
-						data[3] <= 0;
-						data[6] <= 0;
-						data[7] <= 0;
-						data[8] <= 0;
-						data[4] <= idata;
-						iaddr <= iaddr + 1;
-					end
-					else if (iaddr == inputIndex + 1) begin
-						data[5] <= idata;
-						iaddr <= inputIndex - 12'd64; 
-					end
-					else if (iaddr == inputIndex - 12'd64) begin
-						data[1] <= idata;
-						iaddr <= inputIndex - 12'd64 + 1;
-					end
-					else begin
-						state <= Conv;
-						data[2] <= idata;
-						iaddr <= inputIndex + 2;
-					end
+		end
+		else if (inputCount >= 4032) begin
+			if (inputCount == 4032) begin
+				data[dataCount] <= idata;
+
+				if (dataCount == 1 || dataCount == 4) begin
+					dataCount <= dataCount + 1;
 				end
-				else if (inputIndex == 12'd4095) begin
+				else if (dataCount == 2) begin
+					dataCount <= 4;
+				end
+				else begin //dataCount == 5
 					state <= Conv;
-					data[0] <= data[1];
-					data[1] <= data[2];
-					data[2] <= 0;
-					data[3] <= data[4];
-					data[4] <= data[5];
-					data[5] <= 0;
-					completeLayerZero <= 1;
-				end
-				else begin
-					if (iaddr == inputIndex + 1) begin
-						data[0] <= data[1];
-						data[1] <= data[2];
-						data[3] <= data[4];
-						data[4] <= data[5];
-						data[5] <= idata;
-						iaddr <= iaddr - 12'd64;
-					end
-					else begin
-						state <= Conv;
-						data[2] <= idata;
-						iaddr <= iaddr + 12'd64 + 1;
-					end
-				end
-			end
-			// first column
-			else if (inputIndex % 12'd64 == 0) begin
-				if (iaddr == inputIndex) begin
 					data[0] <= 0;
 					data[3] <= 0;
 					data[6] <= 0;
-					data[4] <= idata;
-					iaddr <= inputIndex + 1;
-				end
-				else if (iaddr == inputIndex + 1) begin
-					data[5] <= idata;
-					iaddr <= inputIndex - 12'd64;
-				end
-				else if (iaddr == inputIndex - 12'd64) begin
-					data[1] <= idata;
-					iaddr <= iaddr + 1;
-				end
-				else if (iaddr == inputIndex - 12'd64 + 1) begin
-					data[2] <= idata;
-					iaddr <= inputIndex + 12'd64;
-				end
-				else if (iaddr == inputIndex + 12'd64) begin
-					data[7] <= idata;
-					iaddr <= iaddr + 1;
-				end
-				else begin
-					state <= Conv;
-					data[8] <= idata;
-					iaddr <= iaddr - 12'd64 + 1;
+					data[7] <= 0;
+					data[8] <= 0;
+					dataCount <= 2;
 				end
 			end
-			// last column
-			else if ((inputIndex + 1) % 12'd64 == 0) begin
+			else if (inputCount == 4095) begin
 				state <= Conv;
 				data[0] <= data[1];
 				data[1] <= data[2];
@@ -227,169 +143,216 @@ always@(posedge clk, posedge reset) begin
 				data[3] <= data[4];
 				data[4] <= data[5];
 				data[5] <= 0;
-				data[6] <= data[7];
-				data[7] <= data[8];
-				data[8] <= 0;
-
 			end
-			// rest pixel
 			else begin
-				if (iaddr == inputIndex + 1) begin
+				data[dataCount] <= idata;
+
+				if (dataCount == 2) begin
+					data[0] <= data[1];
+					data[1] <= data[2];
+					data[3] <= data[4];
+					data[4] <= data[5];
+					dataCount <= 5;
+				end
+				else begin
+					state <= Conv;
+					dataCount <= 2;
+				end
+			end
+		end
+		// MUST ADD ()
+		else if ((inputCount & 12'b000000111111) == 0) begin // % 64 == 0
+			data[dataCount] <= idata;
+
+			if (dataCount == 1 || (dataCount == 4 || dataCount == 7)) begin
+				dataCount <= dataCount + 1;
+			end
+			else if (dataCount == 2 || dataCount == 5) begin
+				dataCount <= dataCount + 2;
+			end
+			else begin // dataCount == 8
+				state <= Conv;
+				data[0] <= 0;
+				data[3] <= 0;
+				data[6] <= 0;
+				dataCount <= 2;
+			end
+		end
+		else if (((inputCount+1) & 12'b000000111111) == 0) begin
+			state <= Conv;
+
+			data[0] <= data[1];
+			data[1] <= data[2];
+			data[2] <= 0;
+			data[3] <= data[4];
+			data[4] <= data[5];
+			data[5] <= 0;
+			data[6] <= data[7];
+			data[7] <= data[8];
+			data[8] <= 0;
+			dataCount <= 1;
+
+		end
+		else begin
+			data[dataCount] <= idata;
+			if (dataCount == 2 || dataCount == 5) begin
+				if (dataCount == 2) begin
 					data[0] <= data[1];
 					data[1] <= data[2];
 					data[3] <= data[4];
 					data[4] <= data[5];
 					data[6] <= data[7];
 					data[7] <= data[8];
-					data[5] <= idata;
-					iaddr <= inputIndex + 1 - 12'd64;
 				end
-				else if (iaddr == inputIndex + 1 - 12'd64) begin
-					data[2] <= idata;
-					iaddr <= inputIndex + 1 + 12'd64;
-				end
-				else begin
-					state <= Conv;
-					data[8] <= idata;
-					iaddr <= iaddr - 12'd64 + 1;
-				end
+				dataCount <= dataCount + 3;
 			end
-
-		end
-		else if (state == Conv) begin
-			state <= WriteLayerZero;
-
-			cdata_wr <= convProduct;
-			caddr_wr <= inputIndex;
-			
-			csel <= 3'b001;
-			cwr <= 1;
-			
-		end
-		else if (state == WriteLayerZero) begin
-			if (completeLayerZero) begin
-				state <= ReadData;
-				outputIndex <= 0;
-
-				crd <= 1;
-				caddr_rd <= 0;
-				csel <= 3'b01;
-			end
-			else begin
-				state <= StoreData;
-				csel <= 3'b000;
-			end
-			inputIndex <= inputIndex + 1; 
-			cwr <= 0;
-
-		end
-		else if (state == ReadData) begin
-			if (caddr_rd == inputIndex) begin
-				pool[0] <= cdata_rd;
-				caddr_rd <= inputIndex + 1;
-			end
-			else if (caddr_rd == inputIndex + 1) begin
-				pool[1] <= cdata_rd;
-				caddr_rd <= inputIndex + 12'd64;
-			end
-			else if (caddr_rd == inputIndex + 12'd64) begin
-				pool[2] <= cdata_rd;
-				caddr_rd <= inputIndex + 12'd64 + 1;
-			end
-			else begin
-				state <= WriteLayerOne;
-				pool[3] <= cdata_rd;
-				
-			end
-
-		end
-		else begin
-			if (~cwr) begin
-				caddr_wr <= outputIndex;
-				outputIndex <= outputIndex + 1;
-				cdata_wr <= max;
-
-				csel <= 3'b011;
-				cwr <= 1;
-			end
-			else begin
-				if (inputIndex < 12'd4030) begin
-					if ((inputIndex + 12'd2) % 12'd64 == 0) begin
-						inputIndex <= inputIndex + 12'd2 + 12'd64;
-						caddr_rd <= inputIndex + 12'd2 + 12'd64;
-					end
-					else begin
-						inputIndex <= inputIndex + 12'd2;
-						caddr_rd <= inputIndex + 12'd2; 
-					end
-					state <= ReadData;
-					crd <= 1;
-					cwr <= 0;
-					csel <= 3'b001;
-				end
-				else begin
-					busy <= 0;
-					crd <= 0;
-					cwr <= 0;
-					csel <= 3'b000;
-
-				end
+			else begin // dataCount == 8
+				state <= Conv;
+				dataCount <= 2;
 			end
 		end
 	end
-	else begin
-		crd <= 0;
+	else if (state == Conv) begin
+		if (convCount <= 8) begin
+			convResult <= convResult + kernel[convCount] * data[convCount];
+			convCount <= convCount + 1;
+		end
+		else if (convCount == 9) begin
+			cdata_wr[19:16] <= convResult[35:32];
+			cdata_wr[15:0] <= (convResult[15] == 1 ? convResult[31:16] + 1 : convResult[31:16]);
+			caddr_wr <= inputCount;
+			convCount <= convCount + 1;
+		end
+		else if (convCount == 10) begin
+			cdata_wr <= cdata_wr + bias;
+			convCount <= convCount + 1;
+		end
+		else begin
+			convCount <= 0;
+			convResult <= 0;
+
+			state <= OutputLayer0;
+			if (cdata_wr[19] == 1) cdata_wr <= 0;
+			cwr <= 1;
+			csel <= 3'b001;
+		end
+	end
+	else if (state == OutputLayer0) begin
 		cwr <= 0;
 		csel <= 3'b000;
+		if (inputCount == 4095) begin
+			state <= MaxPooling;
+			crd <= 1;
+			csel <= 3'b001;
+			cdata_wr <= 0;
+			dataCount <= 0;
+		end
+		else begin
+			state <= InputData;
+			inputCount <= inputCount + 1;
+		end
+	end
+	else if (state == MaxPooling) begin
+		if (dataCount <= 3) begin
+			if (cdata_wr < cdata_rd) begin
+				cdata_wr <= cdata_rd;
+			end
+			dataCount <= dataCount + 1;
+		end
+		else begin
+			if (((poolCount + 2) & 6'b111111) == 0) begin
+				poolCount <= poolCount + 66;
+			end
+			else begin
+				poolCount <= poolCount + 2;
+			end
+
+			state <= OutputLayer1;
+
+			caddr_wr <= layer1Index;
+
+			crd <= 0;
+			cwr <= 1;
+			csel <= 3'b011;
+		end
+	end
+	else if (state == OutputLayer1) begin
+		cwr <= 0;
+		if (layer1Index == 1023) begin
+			csel <= 0;
+			busy <= 0;
+		end
+		else begin
+			state <= MaxPooling;
+			layer1Index <= layer1Index + 1;
+			crd <= 1;
+			csel <= 3'b001;
+			cdata_wr <= 0;
+			dataCount <= 0;
+		end
 	end
 end
 
 
-reg [3:0] i;
-//reg [43:0] temp [8:0];
-
-
-always@(state) begin
-	if (state == Conv || state == WriteLayerZero) begin
-		max = 0;
-		convProduct = {bias, 16'd0};
-		for (i = 0; i <= 8; i = i + 1) begin
-			convProduct = convProduct + data[i] * kernel[i];
-		end
-
-		/*temp[0] = data[0] * kernel[0];
-		temp[1] = data[1] * kernel[1];
-		temp[2] = data[2] * kernel[2];
-		temp[3] = data[3] * kernel[3];
-		temp[4] = data[4] * kernel[4];
-		temp[5] = data[5] * kernel[5];
-		temp[6] = data[6] * kernel[6];
-		temp[7] = data[7] * kernel[7];
-		temp[8] = data[8] * kernel[8];
-		convProduct = {bias, 16'd0} + temp[0] + temp[1] + temp[2] + temp[3] + temp[4] + temp[5] + temp[6] + temp[7] + temp[8];
-		*/
-
-		if (convProduct[43] == 1) 
-			convProduct = 0;
-		else
-			convProduct = {convProduct[43], convProduct[34:16]} + convProduct[15];
-
+always@(*) begin
+	if (state == InputData) begin
+		case(dataCount) 
+			0: begin
+				iaddr = inputCount - 65;
+			end
+			1: begin
+				iaddr = inputCount - 64;
+			end
+			2: begin
+				iaddr = inputCount - 63;
+			end
+			3: begin
+				iaddr = inputCount - 1;
+			end
+			4: begin
+				iaddr = inputCount;
+			end
+			5: begin
+				iaddr = inputCount + 1;
+			end
+			6: begin
+				iaddr = inputCount + 63;
+			end
+			7: begin
+				iaddr = inputCount + 64;
+			end
+			8: begin
+				iaddr = inputCount + 65;
+			end
+			default: begin
+				iaddr = 0;
+			end
+		endcase
+		caddr_rd = 0;
 	end
-	else if (state == ReadData || state == WriteLayerOne) begin
-		convProduct = 0;
-
-		max = pool[0];
-		for (i = 1; i <= 3; i = i + 1) begin
-			if (pool[i] > max)
-				max = pool[i];
-			else 
-				max = max + 0;
-		end
-
+	else if (state == MaxPooling) begin
+		case(dataCount)
+			0: begin
+				caddr_rd = poolCount;
+			end
+			1: begin
+				caddr_rd = poolCount + 1;
+			end
+			2: begin
+				caddr_rd = poolCount + 64;
+			end
+			3: begin
+				caddr_rd = poolCount + 65;
+			end
+			default: begin
+				caddr_rd = 0;
+			end
+		endcase
+		iaddr = 0;
 	end
 	else begin
-		max = 0;
-		convProduct = 0;
+		iaddr = 0;
+		caddr_rd = 0;
 	end
 end
 
