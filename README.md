@@ -17,6 +17,10 @@
 - 2019 Image Convolutional Circuit Design   
   ![](https://img.shields.io/badge/area-34883-pink) ![](https://img.shields.io/badge/timing-1432421-lightblue)
 
+- 2020 String Matching Engine
+    - v1 ![](https://img.shields.io/badge/area-17118-pink) ![](https://img.shields.io/badge/timing-34540-lightblue)
+    - v2 ![](https://img.shields.io/badge/area-19176-pink) ![](https://img.shields.io/badge/timing-32780-lightblue)
+
 - 2022 Job Assignment Machine  
   ![](https://img.shields.io/badge/area-7504-pink) ![](https://img.shields.io/badge/Get_valid_at_cycle-500602-lightblue)
 
