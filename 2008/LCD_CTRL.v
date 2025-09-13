@@ -18,18 +18,12 @@ reg [3:0] dataRow;
 reg [3:0] dataCol;
 
 // Output
-reg [4:0] outputCount;
-reg [4:0] originRow;
-reg [4:0] originCol;
+reg [2:0] originRow;
+reg [3:0] originCol;
 
 always@(posedge clk, posedge reset) begin
     if (reset) begin
         state <= ReceiveCmd;
-
-        
-        outputCount <= 0;
-        originRow <= 3;
-        originCol <= 4;
 
         busy <= 0;
         output_valid <= 0;
@@ -75,9 +69,6 @@ always@(posedge clk, posedge reset) begin
                         state <= cmd + 1;
                     end
                 end
-                default: begin
-                    state <= ReceiveCmd;
-                end
             endcase
         end
     end
@@ -98,23 +89,18 @@ always@(posedge clk, posedge reset) begin
         else begin
             dataCol <= dataCol + 1;
         end
-
     end
     else if (state == ZoomFitOutput) begin
-        if (outputCount <= 15) begin
-            if (outputCount == 0) begin
+        if (dataRow <= 7) begin
+            if (dataRow == 1 && dataCol == 1) begin
                 output_valid <= 1;
             end
 
             dataout <= data[dataRow][dataCol];
 
-            outputCount <= outputCount + 1;
-
             if (dataCol == 10) begin
-                if (dataRow != 7) begin
-                    dataCol <= 1;
-                    dataRow <= dataRow + 2;
-                end
+                dataCol <= 1;
+                dataRow <= dataRow + 2;
             end
             else begin
                 dataCol <= dataCol + 3;
@@ -124,25 +110,19 @@ always@(posedge clk, posedge reset) begin
             busy <= 0;
             output_valid <= 0;
             state <= ReceiveCmd;
-            outputCount <= 0;
-
         end
     end
     else if (state == ZoomInOutput) begin
-        if (outputCount <= 15) begin
-            if (outputCount == 0) begin
+        if (dataRow <= originRow + 3) begin
+            if (dataRow == originRow && dataCol == originCol) begin
                 output_valid <= 1;
             end
 
             dataout <= data[dataRow][dataCol];
 
-            outputCount <= outputCount + 1;
-
             if (dataCol == originCol + 3) begin
-                if (dataRow != originRow + 3) begin
-                    dataCol <= originCol;
-                    dataRow <= dataRow + 1;
-                end
+                dataCol <= originCol;
+                dataRow <= dataRow + 1;
             end
             else begin
                 dataCol <= dataCol + 1;
@@ -152,7 +132,6 @@ always@(posedge clk, posedge reset) begin
             busy <= 0;
             output_valid <= 0;
             state <= ReceiveCmd;
-            outputCount <= 0;
         end
     end
     else if (state == ShiftRight) begin
@@ -204,10 +183,4 @@ always@(posedge clk, posedge reset) begin
         dataCol <= originCol;
     end
 end
-
-
-
-
-
-
 endmodule
