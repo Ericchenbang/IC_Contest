@@ -23,6 +23,10 @@
     - v1 ![](https://img.shields.io/badge/area-17118-pink) ![](https://img.shields.io/badge/timing-34540-lightblue)
     - v2 ![](https://img.shields.io/badge/area-19176-pink) ![](https://img.shields.io/badge/timing-32780-lightblue)
 
+- 2021 Geofence
+    - v1 ![](https://img.shields.io/badge/area-21375-pink) ![](https://img.shields.io/badge/timing-50670-lightblue)
+    - v2 ![](https://img.shields.io/badge/area-21852-pink) ![](https://img.shields.io/badge/timing-48870-lightblue)
+
 - 2022 Job Assignment Machine  
   ![](https://img.shields.io/badge/area-7504-pink) ![](https://img.shields.io/badge/Get_valid_at_cycle-500602-lightblue)
 
