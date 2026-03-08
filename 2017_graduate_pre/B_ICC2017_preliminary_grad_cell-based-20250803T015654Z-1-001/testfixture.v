@@ -65,17 +65,17 @@ res_RAM  u_res_RAM(.res_rd(res_rd), .res_wr(res_wr), .res_addr(res_addr), .res_d
 
 always begin #(`CYCLE/2) clk = ~clk; end
 
-// initial begin
-// 	`ifdef FSDB
-// 		$fsdbDumpfile("DT.fsdb");
-// 		$fsdbDumpvars;
-// 		$fsdbDumpMDA(u_sti_ROM.sti_M);
-// 		$fsdbDumpMDA(u_res_RAM.res_M);
-// 	`elsif VCD
-// 		$dumpfile("DT.vcd");
-// 		$dumpvars;
-// 	`endif	
-// end
+initial begin
+	`ifdef FSDB
+		$fsdbDumpfile("DT.fsdb");
+		$fsdbDumpvars;
+		$fsdbDumpMDA(u_sti_ROM.sti_M);
+		$fsdbDumpMDA(u_res_RAM.res_M);
+	`elsif VCD
+		$dumpfile("DT.vcd");
+		$dumpvars;
+	`endif	
+end
 
 initial begin  // data input
 	$display("-----------------------------------------------------\n");
