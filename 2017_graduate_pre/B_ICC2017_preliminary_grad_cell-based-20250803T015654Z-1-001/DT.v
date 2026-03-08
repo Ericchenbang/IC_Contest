@@ -57,7 +57,7 @@ wire [7:0] back2 = SE < E ? SE : E;
 wire [8:0] back3 = back1 < back2 ? back1 : back2;
 wire [7:0] backwardMin = target < back3 + 1 ? target : back3 + 1;
 
-always@(posedge clk or posedge reset) begin
+always@(posedge clk or negedge reset) begin
 	if (!reset) begin
 		state <= ReadROM;
 
@@ -66,7 +66,7 @@ always@(posedge clk or posedge reset) begin
 
 		res_wr <= 0;
 		res_rd <= 0;
-		res_addr <= -1;
+		res_addr <= 16383;
 		
 		done <= 0;
 
