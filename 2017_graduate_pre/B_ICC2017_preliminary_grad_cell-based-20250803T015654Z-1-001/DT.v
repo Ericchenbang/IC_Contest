@@ -13,53 +13,44 @@ module DT(
 	input		[7:0]	res_di,
 
 	output reg done 
-	);
+);
 
 
 parameter ReadROM = 0, ROMtoRAM = 1, 
-			ForCheckTarget = 2, ForFindPixel = 3, Forward = 4, ForNext = 5,
-			BackCheckTarget = 6, BackFindPixel = 7, Backward = 8, BackNext = 9
-			;
-
+		ForCheckTarget = 2, ForFindPixel = 3, Output = 4, ForNext = 5,
+		BackCheckTarget = 6, BackFindPixel = 7, BackNext = 8;
 reg [3:0] state;
 
-// ReadROM
+
 reg [9:0] romIndex;
-// ROMtoRAM
 reg [3:0] ramIndex;
 
 // Forward
-reg [7:0] NW;
-reg [7:0] N;
-reg [7:0] NE;
-reg [7:0] W;
+reg [7:0] A, B, C, D;
 reg [7:0] target;
 
-reg forCheck;
-reg forFindIndex;
+reg check;
+reg findIndex;
 
-wire [7:0] compare1 = NW < N ? NW : N;
-wire [7:0] compare2 = NE < W ? NE : W;
-wire [7:0] forwardMin = compare1 < compare2 ? compare1 : compare2;
+reg forward;
 
+wire [7:0] compare1 = A < B ? A : B;
+wire [7:0] compare2 = C < D ? C : D;
+wire [7:0] forwardMin = compare1 < compare2 ? compare1 + 1: compare2 + 1;
 
 // Backward
-reg [7:0] SW;
-reg [7:0] S;
-reg [7:0] SE;
-reg [7:0] E;
+wire [7:0] backwardMin = target < forwardMin? target : forwardMin;
 
-reg backCheck;
-reg backFindIndex;
+wire [7:0] outputMin = forward ? forwardMin: backwardMin;
 
-wire [7:0] back1 = SW < S ? SW : S;
-wire [7:0] back2 = SE < E ? SE : E;
-wire [8:0] back3 = back1 < back2 ? back1 : back2;
-wire [7:0] backwardMin = target < back3 + 1 ? target : back3 + 1;
+wire [2:0] romMod8 = (romIndex & 3'b111);
+wire [2:0] romMinus7Mod8 = ((romIndex - 10'd7) & 3'b111);
+
+
 
 always@(posedge clk or negedge reset) begin
 	if (!reset) begin
-		state <= ReadROM;
+		state <= ROMtoRAM;
 
 		sti_rd <= 1;
 		sti_addr <= 0;
@@ -73,16 +64,12 @@ always@(posedge clk or negedge reset) begin
 		romIndex <= 0;
 		ramIndex <= 0;
 
-		NW <= 0; N <= 0; NE <= 0; W <= 0; target <= 0;
+		A <= 0; B <= 0; C <= 0; D <= 0; target <= 0;
 
-		forCheck <= 0;
-		forFindIndex <= 0;
+		check <= 0;
+		findIndex <= 0;
 
-		SW <= 0; S <= 0; SE <= 0; E <= 0;
-
-		backCheck <= 0;
-		backFindIndex <= 0;
-
+		forward <= 1;
 	end	
 	else if (state == ReadROM) begin
 		state <= ROMtoRAM;
@@ -91,34 +78,47 @@ always@(posedge clk or negedge reset) begin
 		res_wr <= 0;
 	end
 	else if (state == ROMtoRAM) begin
-		if (ramIndex == 4'd15) begin
-			if (romIndex == 10'd1023) begin
-				state <= ForCheckTarget;
-				forCheck <= 0;
+		res_wr <= 1;
+		res_addr <= res_addr + 1;
 
-				romIndex <= 8;
-				ramIndex <= 1;
+		if (romIndex < 10'd8 || romIndex > 10'd1015) begin
+			res_do <= 8'd0;
+			ramIndex <= ramIndex + 1;
+			
+			if (ramIndex == 4'd15) begin
+				romIndex <= romIndex + 1;
+
+				if (romIndex == 10'd7) begin
+					state <= ReadROM;
+
+					sti_rd <= 1;
+					sti_addr <= romIndex + 1;
+				end
+				else if (romIndex == 10'd1023) begin
+					state <= ForCheckTarget;
+					check <= 0;
+
+					romIndex <= 10'd8;
+					ramIndex <= 4'd1;
+				end
 			end
-			else begin
+		end
+		else begin
+			res_do <= sti_di[4'd15 - ramIndex];
+			ramIndex <= ramIndex + 1;
+
+			if (ramIndex == 4'd15) begin
 				state <= ReadROM;
 			
 				sti_rd <= 1;
 				sti_addr <= romIndex + 1;
 				romIndex <= romIndex + 1;
-				ramIndex <= 0;
 			end
 		end
-		else begin
-			ramIndex <= ramIndex + 1;
-		end
-		
-		res_wr <= 1;
-		res_addr <= res_addr + 1;
-		res_do <= sti_di[4'd15 - ramIndex];
 	end
 	else if (state == ForCheckTarget) begin
-		if (!forCheck) begin
-			forCheck <= 1;
+		if (!check) begin
+			check <= 1;
 
 			res_wr <= 0;
 			res_rd <= 1;
@@ -128,66 +128,65 @@ always@(posedge clk or negedge reset) begin
 			target <= res_di;
 
 			if (romIndex < 10'd16) begin
-				state <= Forward;
-				// NW <= 0; N <= 0; NE <= 0;
+				state <= Output;
+				// A <= 0; B <= 0; C <= 0;
 			end
-			else if (((romIndex & 3'b111) == 0) && (ramIndex == 4'd1)) begin
+			else if ((romMod8 == 0) && (ramIndex == 4'd1)) begin
 				state <= ForFindPixel;
 
-				NW <= 0; W <= 0;
-				forFindIndex <= 0;
+				A <= 0; D <= 0;
+				findIndex <= 0;
 				res_rd <= 1;
 				res_addr <= (romIndex << 4) + ramIndex - 128;
 			end
 			else begin
 				state <= ForFindPixel;
 				
-				NW <= N; N <= NE;
-				forFindIndex <= 1;
+				A <= B; B <= C;
+				findIndex <= 1;
 				res_rd <= 1;
 				res_addr <= (romIndex << 4) + ramIndex - 127;
 			end
 		end
 	end
 	else if (state == ForFindPixel) begin
-		if (forFindIndex == 0) begin
+		if (!findIndex) begin
 			res_addr <= res_addr + 1;
-			N <= res_di;
+			B <= res_di;
 			
-			forFindIndex <= 1;
+			findIndex <= 1;
 		end
 		else begin
-			state <= Forward;
+			state <= Output;
 			
 			res_rd <= 0;
-			NE <= res_di;
+			C <= res_di;
 		end
 	end
-	else if (state == Forward) begin
-		state <= ForNext;
+	else if (state == Output) begin
+		state <= forward ? ForNext : BackNext;
 
 		if (target > 0) begin
 			res_wr <= 1;
 			res_addr <= (romIndex << 4) + ramIndex;
-			res_do <= forwardMin + 1;
-			
-			W <= forwardMin + 1;
+			res_do <= outputMin;
+			D <= outputMin;
 		end
 		else begin
-			W <= 0;		// W <= target
+			D <= 0;		// D <= target
 		end
 	end
 	else if (state == ForNext) begin
 		res_wr <= 0;
+		check <= 0;
 
-		if ((((romIndex - 10'd7) & 3'b111) == 0) && (ramIndex == 4'd14)) begin
+		if ((romMinus7Mod8 == 0) && (ramIndex == 4'd14)) begin
 			if (romIndex == 10'd1015) begin
 				state <= BackCheckTarget;
-				backCheck <= 0;
+				forward <= 0;
 			end
 			else begin
 				state <= ForCheckTarget;
-				forCheck <= 0;
 				
 				romIndex <= romIndex + 1;
 				ramIndex <= 1;
@@ -195,7 +194,6 @@ always@(posedge clk or negedge reset) begin
 		end
 		else begin
 			state <= ForCheckTarget;
-			forCheck <= 0;
 
 			if (ramIndex == 4'd15) begin
 				romIndex <= romIndex + 1;
@@ -204,8 +202,8 @@ always@(posedge clk or negedge reset) begin
 		end
 	end
 	else if (state == BackCheckTarget) begin
-		if (!backCheck) begin
-			backCheck <= ~backCheck;
+		if (!check) begin
+			check <= ~check;
 
 			res_wr <= 0;
 			res_rd <= 1;
@@ -215,41 +213,41 @@ always@(posedge clk or negedge reset) begin
 			target <= res_di;
 
 			if (romIndex > 10'd1007) begin
-				state <= Backward;
+				state <= Output;
 			end
-			else if ((((romIndex - 10'd7) & 3'b111) == 0) && (ramIndex == 4'd14)) begin
+			else if ((romMinus7Mod8 == 0) && (ramIndex == 4'd14)) begin
 				state <= BackFindPixel;
 
-				SE <= 0; E <= 0;
-				backFindIndex <= 0;
+				C <= 0; D <= 0;
+				findIndex <= 0;
 				res_rd <= 1;
 				res_addr <= (romIndex << 4) + ramIndex + 128;
 			end
 			else begin
 				state <= BackFindPixel;
 
-				SE <= S; S <= SW;
-				backFindIndex <= 1;
+				C <= B; B <= A;
+				findIndex <= 1;
 				res_rd <= 1;
 				res_addr <= (romIndex << 4) + ramIndex + 127;
 			end
 		end
 	end
 	else if (state == BackFindPixel) begin
-		if (backFindIndex == 0) begin
-			backFindIndex <= 1;
+		if (findIndex == 0) begin
+			findIndex <= 1;
 			
 			res_addr <= res_addr - 1;
-			S <= res_di;
+			B <= res_di;
 		end
 		else begin
-			state <= Backward;
+			state <= Output;
 
 			res_rd <= 0;
-			SW <= res_di;
+			A <= res_di;
 		end
 	end
-	else if (state == Backward) begin
+	/*else if (state == Backward) begin
 		state <= BackNext;
 
 		if (target > 0) begin
@@ -257,30 +255,29 @@ always@(posedge clk or negedge reset) begin
 			res_addr <= (romIndex << 4) + ramIndex;
 			res_do <= backwardMin;
 
-			E <= backwardMin;
+			D <= backwardMin;
 		end
 		else begin
-			E <= 0;
+			D <= 0;
 		end
-	end
+	end*/
 	else if (state == BackNext) begin
 		res_wr <= 0;
+		check <= 0;
 
-		if (((romIndex & 3'b111) == 0) && (ramIndex == 4'd1)) begin
+		if ((romMod8 == 0) && (ramIndex == 4'd1)) begin
 			if (romIndex == 10'd8) begin
 				done <= 1;
 			end			
 			else begin
 				state <= BackCheckTarget;
-				backCheck <= 0;
-
+	
 				romIndex <= romIndex - 1;
 				ramIndex <= 4'd14;
 			end
 		end
 		else begin
 			state <= BackCheckTarget;
-			backCheck <= 0;
 
 			if (ramIndex == 4'd0) begin
 				romIndex <= romIndex - 1;
