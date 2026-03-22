@@ -9,243 +9,246 @@ module LASER (
     output reg [3:0] C2Y,
     output reg DONE
 );
+integer i;
+genvar gv_i;
 
-
-parameter ReadData = 2'd0, CountData = 2'd1, NextCenter = 2'd2, Output = 2'd3;
-reg [1:0] state;
-
+reg [2:0] state, next_state;
+localparam Idle = 3'd0;
+localparam ReadData = 3'd1;
+localparam FindC1_0 = 3'd2;
+localparam FindC1_1 = 3'd3;
+localparam FindC2 = 3'd4;
+localparam CountIn = 3'd5;
+localparam Output = 3'd6;
 
 // ReadData
-reg data [15:0] [15:0];
-reg [5:0] dataCount;
+reg [3:0] pts [39:0][1:0];
 
+reg [5:0] cnt;
+wire [5:0] cnt_add_1 = cnt + 6'd1;
+wire read_end = (cnt == 6'd39);
 
-// FindCircle
-reg [5:0] maxDataCount;
-reg [3:0] centerX, centerY;     // center traversal
-reg [3:0] x, y;                 // data traversal
+// FindC1_0
+reg firstC1;
+reg [3:0] cx, cy;
+wire [3:0] cx_begin = 4'd15, cy_begin = 4'd0; 
+wire [3:0] cx_end = 4'd0, cy_end = 4'd15;
+wire find_end = (cx == cx_end && cy == cy_end);
+wire [3:0] cx_next = cx - 4'd1;
+wire [3:0] cy_next = (cx == cx_end) ? cy - 4'd1 : cy;
 
+reg [4:0] c1_x_max, c1_y_max, c2_x_max, c2_y_max;
+reg in_curr [39:0];
+reg in_c1 [39:0], in_c2 [39:0];
+wire in_both [39:0];
 
-wire [3:0] xUpperBound, xLowerBound;
-assign xUpperBound = (centerX > 11) ? 15 : centerX + 4;
-assign xLowerBound = (centerX < 4) ? 0 : centerX - 4;
+for (gv_i = 0; gv_i < 40; gv_i = gv_i + 1) begin
+    checkIn u_checkIn (.x(pts[gv_i][0]), .y(pts[gv_i][1]), .cx(cx), .cy(cy), .in(in_curr[gv_i]));
 
-wire [3:0] yUpperBound, yLowerBound;
-assign yUpperBound = (centerY > 11) ? 15 : centerY + 4;
-assign yLowerBound = (centerY < 4) ? 0 : centerY - 4;
+    assign in_both[gv_i] = (in_c1[gv_i] || in_c2[gv_i]);
+end
 
+/*
+wire [1:0] t0 [19:0];
+wire [2:0] t1 [9:0];
+wire [3:0] t2 [4:0];
+for (gv_i = 0; 2 * gv_i < 40; gv_i = gv_i + 1) begin
+    assign t0[gv_i] = in_curr[2 * gv_i] + in_curr[2 * gv_i + 1];
+end
+for (gv_i = 0; 2 * gv_i < 20; gv_i = gv_i + 1) begin
+    assign t1[gv_i] = t0[2 * gv_i] + t0[2 * gv_i + 1];
+end
+for (gv_i = 0; 2 * gv_i < 10; gv_i = gv_i + 1) begin
+    assign t2[gv_i] = t1[2 * gv_i] + t1[2 * gv_i + 1];
+end
+wire [4:0] in_cnt = t2[4] + t2[3] + t2[2] + t2[1] + t2[0];
+*/
 
-wire [2:0] xMinusCenterX, yMinusCenterY;
-assign xMinusCenterX = (centerX > x) ? (centerX - x) : (x - centerX);
-assign yMinusCenterY = (centerY > y) ? (centerY - y) : (y - centerY);
+wire [1:0] in_total_1 [19:0];
+wire [2:0] in_total_2 [9:0];
+wire [3:0] in_total_3 [4:0];
 
-wire [4:0] powerXMC, powerYMC;
-assign powerXMC = (xMinusCenterX == 0) ? 0 : ((xMinusCenterX == 1) ? xMinusCenterX : ((xMinusCenterX == 2) ? xMinusCenterX << 1 : ((xMinusCenterX == 3) ? (xMinusCenterX << 1) + xMinusCenterX : xMinusCenterX << 2)));
-assign powerYMC = (yMinusCenterY == 0) ? 0 : ((yMinusCenterY == 1) ? yMinusCenterY : ((yMinusCenterY == 2) ? yMinusCenterY << 1 : ((yMinusCenterY == 3) ? (yMinusCenterY << 1) + yMinusCenterY : yMinusCenterY << 2)));
+for (gv_i = 0; 2 * gv_i < 40; gv_i = gv_i + 1) begin
+    assign in_total_1[gv_i] = in_both[2*gv_i] + in_both[2*gv_i+1];
+end
+for (gv_i = 0; 2 * gv_i < 20; gv_i = gv_i + 1) begin
+    assign in_total_2[gv_i] = in_total_1[2*gv_i] + in_total_1[2*gv_i+1];
+end
+for (gv_i = 0; 2 * gv_i < 10; gv_i = gv_i + 1) begin
+    assign in_total_3[gv_i] = in_total_2[2*gv_i] + in_total_2[2*gv_i+1];
+end
+wire [4:0] in_total = in_total_3[4] + in_total_3[3] + in_total_3[2] + in_total_3[1] + in_total_3[0]; 
+reg [4:0] in_total_max;
+reg [4:0] last_in_total_max;
 
-wire [5:0] distance;
-assign distance = powerXMC + powerYMC;
+reg [2:0] last_state;
+always @(*) begin
+    next_state = state;
+    case(state) 
+        Idle: begin
+            next_state = ReadData;
+        end
+        ReadData: begin
+            if (read_end) begin
+                next_state = FindC1_0;
+            end
+            else begin
+                next_state = ReadData;
+            end
+        end
+        FindC1_0: begin
+            next_state = FindC1_1;
+        end
+        FindC1_1: begin
+            if (find_end) begin
+                next_state = CountIn;
+            end
+            else begin
+                next_state = FindC1_1;
+            end
+        end
+        FindC2: begin
+            if (find_end) begin
+                next_state = CountIn;
+            end
+            else begin
+                next_state = FindC2;
+            end
+        end
+        CountIn: begin
+            if (last_in_total_max == in_total_max) begin
+                next_state = Output;
+            end
+            else if (last_state == FindC1_1) begin
+                next_state = FindC2;
+            end
+            else if (last_state == FindC2) begin
+                next_state = FindC1_1;
+            end
+        end
+        Output: begin
+            next_state <= ReadData;
+        end
+    endcase
+end
 
-wire inCircle;
-assign inCircle = (distance <= 16);
-
-// 0: first find c1 center; 1: find c1 center; 2: find c2 center;
-reg [1:0] findState;
-
-wire [2:0] xMinusC1X, yMinusC1Y;
-assign xMinusC1X = (C1X > x) ? (C1X - x) : (x - C1X);
-assign yMinusC1Y = (C1Y > y) ? (C1Y - y) : (y - C1Y);
-
-wire [4:0] powerXMC1X, powerYMC1Y;
-assign powerXMC1X = (xMinusC1X == 0) ? 0 : ((xMinusC1X == 1) ? xMinusC1X : ((xMinusC1X == 2) ? xMinusC1X << 1 : ((xMinusC1X == 3) ? (xMinusC1X << 1) + xMinusC1X : xMinusC1X << 2)));
-assign powerYMC1Y = (yMinusC1Y == 0) ? 0 : ((yMinusC1Y == 1) ? yMinusC1Y : ((yMinusC1Y == 2) ? yMinusC1Y << 1 : ((yMinusC1Y == 3) ? (yMinusC1Y << 1) + yMinusC1Y : yMinusC1Y << 2)));
-
-wire [5:0] distanceC1;
-assign distanceC1 = powerXMC1X + powerYMC1Y;
-
-wire inCircleC1;
-assign inCircleC1 = (distanceC1 <= 16);
-
-wire [2:0] xMinusC2X, yMinusC2Y;
-assign xMinusC2X = (C2X > x) ? (C2X - x) : (x - C2X);
-assign yMinusC2Y = (C2Y > y) ? (C2Y - y) : (y - C2Y);
-
-wire [4:0] powerXMC2X, powerYMC2Y;
-assign powerXMC2X = (xMinusC2X == 0) ? 0 : ((xMinusC2X == 1) ? xMinusC2X : ((xMinusC2X == 2) ? xMinusC2X << 1 : ((xMinusC2X == 3) ? (xMinusC2X << 1) + xMinusC2X : xMinusC2X << 2)));
-assign powerYMC2Y = (yMinusC2Y == 0) ? 0 : ((yMinusC2Y == 1) ? yMinusC2Y : ((yMinusC2Y == 2) ? yMinusC2Y << 1 : ((yMinusC2Y == 3) ? (yMinusC2Y << 1) + yMinusC2Y : yMinusC2Y << 2)));
-
-wire [5:0] distanceC2;
-assign distanceC2 = powerXMC2X + powerYMC2Y;
-
-wire inCircleC2;
-assign inCircleC2 = (distanceC2 <= 16);
-
-
-reg [3:0] lastC1X, lastC1Y;
-reg [3:0] lastC2X, lastC2Y;
-
-wire hasData;
-assign hasData = (data[x][y] == 1);
-
-integer i, j;
 always@(posedge CLK or posedge RST) begin
     if (RST) begin
-        state <= ReadData;
-
-        for (i = 0; i <= 15; i = i + 1) begin
-            for (j = 0; j <= 15; j = j + 1) begin
-                data[i][j] <= 0;
-            end
-        end
-
-        dataCount <= 0;
-        findState <= 0;
-
-        DONE <= 0;
+        state <= Idle;
     end
-    else if (state == ReadData) begin
-        if (dataCount == 40) begin
-            state <= CountData;
-            dataCount <= 0;
-            maxDataCount <= 0;
-
-            centerX <= 0;
-            centerY <= 0;
-            x <= 0;
-            y <= 0;
-        end
-        else begin
-            dataCount <= dataCount + 1;
-        end
-            
-        data[X][Y] <= 1;
-    end
-    else if (state == CountData) begin
-        if (y == yUpperBound) begin
-            if (x == xUpperBound) begin
-                state <= NextCenter;
-            end 
-            else begin
-                x <= x + 1;
-                y <= yLowerBound;
-            end
-        end
-        else begin
-            y <= y + 1;
-        end
-
-        if (findState == 0) begin
-            if (inCircle && hasData) begin
-                dataCount <= dataCount + 1;
-            end
-        end
-        else if (findState == 1) begin
-            if ((inCircle && !inCircleC2) && hasData) begin
-                dataCount <= dataCount + 1;
-            end
-        end
-        else begin
-            if ((inCircle && !inCircleC1) && hasData) begin
-                dataCount <= dataCount + 1;
-            end 
-        end
-    end
-    else if (state == NextCenter) begin
-        if (centerY == 4'hd && centerX == 4'hd) begin
-            /** Choose c1/c2 initial center logic can be modified later*/
-            dataCount <= 0;
-            maxDataCount <= 0;
-            
-            
-            centerX <= 2;
-            centerY <= 2;
-            x <= 0;
-            y <= 0;
-
-            if (findState == 0) begin
-                state <= CountData;
-                findState <= 2;    // find c2 based on c1
-
-                lastC1X <= C1X;
-                lastC1Y <= C1Y;
-                lastC2X <= C1X;     // since next c2 center definitely not be the same with c1 center
-                lastC2Y <= C1Y; 
-            end
-            else if (findState == 1) begin
-                if ((lastC1X == C1X) && (lastC1Y == C1Y)) begin
-                    state <= Output;
-                    DONE <= 1;
-                end
-                else begin
-                    state <= CountData;
-                    findState <= 2;    // find c2 based on c1
-
-                    lastC1X <= C1X;
-                    lastC1Y <= C1Y;
-                end
-            end
-            else begin
-                if ((lastC2X == C2X) && (lastC2Y == C2Y)) begin
-                    state <= Output;
-                    DONE <= 1;
-                end
-                else begin
-                    state <= CountData;
-                    findState <= 1;    // find c1 based on c2
-
-                    lastC2X <= C2X;
-                    lastC2Y <= C2Y;
-                end
-            end
-        end
-        else begin
-            state <= CountData;
-            dataCount <= 0;
-
-            if (dataCount > maxDataCount) begin
-                if (findState == 0 || findState == 1) begin
-                    C1X <= centerX;
-                    C1Y <= centerY;   
-                end
-                else begin
-                    C2X <= centerX;
-                    C2Y <= centerY;
-                end
-                
-                maxDataCount <= dataCount;
-            end
-
-            if (centerY == 4'hd) begin
-                centerX <= centerX + 1;   
-                centerY <= 2;  
-                
-                x <= xLowerBound + 1;
-                y <= 0;         
-            end
-            else begin
-                centerY <= centerY + 1;
-            
-                x <= xLowerBound;
-                y <= yLowerBound + 1;
-            end
-        end
-    end
-    else if (state == Output) begin
-        state <= ReadData;
-        DONE <= 0;
-
-        dataCount <= 0;
-        findState <= 0;
-
-        for (i = 0; i <= 15; i++) begin
-            for (j = 0; j <= 15; j++) begin
-                data[i][j] <= 0;
-            end
-        end
+    else begin
+        state <= next_state;
     end
 end
 
 
 
 
+always @(posedge CLK) begin
+    case (state)
+        Idle: begin
+            cnt <= 6'd1;
+            pts[39][0] <= X;
+            pts[39][1] <= Y;
+
+        end
+        ReadData: begin
+            firstC1 <= 1'b1;
+            cnt <= cnt_add_1;
+
+            pts[39][0] <= X;
+            pts[39][1] <= Y;
+            for (i = 0; i < 39; i = i + 1) begin
+                pts[i][0] <= pts[i+1][0];
+                pts[i][1] <= pts[i+1][1];
+                in_c1[i] <= 0;
+                in_c2[i] <= 0;
+            end
+
+            in_total_max <= 0;
+            last_in_total_max <= 0;
+        end
+        FindC1_0: begin
+            cx <= cx_begin;
+            cy <= cy_begin;
+
+        end
+        FindC1_1: begin
+            if (find_end) begin
+                cx <= cx_begin;
+                cy <= cy_begin;
+                last_state <= FindC1_1;
+            end
+            else begin
+                cx <= cx_next;
+                cy <= cy_next;
+            end
+
+            if (in_total > in_total_max) begin
+                for (i = 0; i < 40; i = i + 1) begin
+                    in_c1[i] <= in_curr[i];
+                end
+                in_total_max <= in_total;
+                c1_x_max <= cx;
+                c1_y_max <= cy;
+            end
+        end
+        FindC2: begin
+            if (find_end) begin
+                cx <= cx_begin;
+                cy <= cy_begin;
+                last_state <= FindC1_1;
+            end
+            else begin
+                cx <= cx_next;
+                cy <= cy_next;
+            end
+
+            if (in_total > in_total_max) begin
+                for (i = 0; i < 40; i = i + 1) begin
+                    in_c2[i] <= in_curr[i];
+                end
+                in_total_max <= in_total;
+                c2_x_max <= cx;
+                c2_y_max <= cy;
+            end
+        end
+        CountIn: begin
+            if (last_state == FindC1_1) begin
+                C1X <= c1_x_max;
+                C1Y <= c1_y_max;
+            end
+            else if (last_state == FindC2) begin
+                C2X <= c2_x_max;
+                C2Y <= c2_y_max;
+            end
+            
+            last_in_total_max <= in_total_max;
+            cx <= cx_begin;
+            cy <= cy_begin;
+        end
+        Output: begin
+            DONE <= 1'b0;
+            cnt <= 6'b0;
+        end
+    endcase
+end
+
+endmodule
+
+
+
+module checkIn (
+    input [3:0] x, y, cx, cy,
+    output in
+);
+    wire [3:0] xd = (x > cx) ? x - cx : cx - x;
+    wire [3:0] yd = (y > cy) ? y - cy : cy - y;
+
+    wire [3:0] ld, sd;
+    assign ld = (xd > yd) ? xd : yd;
+    assign sd = (xd > yd) ? yd : xd;
+
+    assign in = ((ld <= 4'd4 && sd <= 4'd0) || 
+                 (ld <= 4'd3 && sd <= 4'd2)); 
 endmodule
