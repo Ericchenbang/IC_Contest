@@ -36,3 +36,6 @@
 
 -  2017 Distance Transform   
   ![](https://img.shields.io/badge/area-9673-pink) ![](https://img.shields.io/badge/timing-1409248-lightblue)
+
+- 2023 Laser Treatment  
+  ![](https://img.shields.io/badge/area-36865-pink) ![](https://img.shields.io/badge/timing-255340-lightblue) ![](https://img.shields.io/badge/cover-170-lightyellow)
