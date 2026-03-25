@@ -30,6 +30,9 @@
 - 2022 Job Assignment Machine  
   ![](https://img.shields.io/badge/area-7504-pink) ![](https://img.shields.io/badge/Get_valid_at_cycle-500602-lightblue)
 
+- 2026 Optical Refraction  
+  ![](https://img.shields.io/badge/area-441023-pink) ![](https://img.shields.io/badge/timing-169066-lightblue)
+
 # gradulate level
 - 2011 Image Display Control  
   ![](https://img.shields.io/badge/area-80375-pink) ![](https://img.shields.io/badge/timing-4422-lightblue)
